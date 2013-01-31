@@ -1,0 +1,33 @@
+Name:               HP10
+Description:        A set of P10-compliant IRC services.
+
+Version:            0.0
+Cabal-version:      >= 1.8
+Build-type:         Simple
+
+License:            AllRightsReserved
+Copyright:          Will Jones
+Homepage:           http://sacharissa.co.uk
+
+Library
+  Exposed-modules:  Network.IRC.P10.Alex,
+                      Network.IRC.P10.Happy
+
+  Other-modules:    Network.IRC.P10.Position
+
+  Build-depends:    array, base
+  Build-tools:      alex, happy
+
+  Hs-source-dirs:   src
+
+Executable hp10
+  Other-modules:    Network.IRC.P10.Alex,
+                      Network.IRC.P10.Happy,
+                      Network.IRC.P10.Position
+
+  Build-depends:    array, base, network, time
+  Build-tools:      alex, happy
+
+  Main-is:          HP10.hs
+  Hs-source-dirs:   src, hp10
+  Ghc-options:      -main-is HP10
