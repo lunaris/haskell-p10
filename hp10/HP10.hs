@@ -1,5 +1,7 @@
 module HP10 where
 
+import Network.IRC.P10.Happy
+
 import Control.Monad
 import Data.Functor
 import Data.Time
@@ -26,5 +28,12 @@ main
       forever $ do
         l <- hGetLine h
         putStrLn l
+        case parseMessage l of
+          Left err ->
+            putStrLn $ "  Error: " ++ err
+
+          Right m -> do
+            putStr "  "
+            print m
 
       hClose h

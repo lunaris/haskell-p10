@@ -13,13 +13,14 @@ $symbol                     = [\.\;\,\$\|\*\+\?\#\~\-\{\}\(\)\[\]\^\/]
 
 @character                  = $digit | $letter | $symbol
 @space                      = " "
-@newline                    = "\n" | "\r\n"
+@newline                    = \n | \r\n
+@colonString                = ":" (@character | @space)*
+@string                     = @character+
 
 tokens :-
-  @space+                   { token SpaceTk }
-  @newline                  { token NewlineTk }
-  ":"                       { token ColonTk }
-  @character+               { string }
+  $white+                   ;
+  @colonString              { colonString }
+  @string                   { string }
 {
 type AlexInput
   = (Position, Word8, String)
@@ -108,31 +109,31 @@ getPosition
 
 getStartCode :: LP StartCode
 getStartCode
-  = LP $ \s@LPState { lpStartCode = start_code } -> Right (start_code, s)
+  = LP $ \s@LPState { lpStartCode = code } -> Right (code, s)
 
 setStartCode :: StartCode -> LP ()
-setStartCode start_code
+setStartCode code
   = LP $ \s ->
-      Right ((), s { lpStartCode = start_code })
+      Right ((), s { lpStartCode = code })
 
 scanToken :: LP Token
 scanToken = do
-  alex_input@(_, _, input) <- getAlexInput
-  start_code <- getStartCode
+  alexInput@(_, _, input) <- getAlexInput
+  code <- getStartCode
 
-  case alexScan alex_input start_code of
+  case alexScan alexInput code of
     AlexEOF ->
       return EOFTk
 
     AlexError _ ->
       LP $ \_ -> Left "Lexical error"
 
-    AlexSkip alex_input' _ -> do
-      setAlexInput alex_input'
+    AlexSkip alexInput' _ -> do
+      setAlexInput alexInput'
       scanToken
 
-    AlexToken alex_input' len action -> do
-      setAlexInput alex_input'
+    AlexToken alexInput' len action -> do
+      setAlexInput alexInput'
       action (take len input)
 
 lexToken :: (Token -> LP a) -> LP a
@@ -149,17 +150,15 @@ type Constructor
   = String
 
 data Token
-  = SpaceTk
-  | NewlineTk
-  | ColonTk
+  = ColonStringTk String
   | StringTk String
   | EOFTk
   deriving (Eq, Show)
 
-{-# INLINE token #-}
-token :: Token -> Action Token
-token tok _
-  = return tok
+{-# INLINE colonString #-}
+colonString :: Action Token
+colonString
+  = return . ColonStringTk . tail
 
 {-# INLINE string #-}
 string :: Action Token

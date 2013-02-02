@@ -5,7 +5,7 @@ import Network.IRC.P10.Alex
 import Network.IRC.P10.Syntax
 }
 
-%name                     message PostAuthMessage
+%name                     message PassMessage
 %tokentype                { Token }
 %error                    { parseError }
 
@@ -13,12 +13,21 @@ import Network.IRC.P10.Syntax
 %lexer                    { lexToken } { EOFTk }
 
 %token
-  " "                     { SpaceTk }
-  ":"                     { ColonTk }
-  newline                 { NewlineTk }
-  command                 { StringTk $$ }
-  base64                  { StringTk $$ }
-  lastToken               { StringTk $$ }
+  "0"                     { StringTk "0" }
+  "1"                     { StringTk "1" }
+
+  PASS                    { StringTk "PASS" }
+  SERVER                  { StringTk "SERVER" }
+  N                       { StringTk "N" }
+
+  base64Numeric           { StringTk $$ }
+  lastToken               { ColonStringTk $$ }
+
+  serverName              { StringTk $$ }
+  bootTimestamp           { StringTk $$ }
+  linkTimestamp           { StringTk $$ }
+  protocol                { StringTk $$ }
+  flags                   { StringTk $$ }
 
 %%
 
@@ -57,9 +66,15 @@ sep1_(x, s)
 
 --
 
-PostAuthMessage
-  : base64 " " command " " ":" lastToken
-                          { PostAuthMessage $1 $3 [$6] }
+PassMessage
+  : PASS lastToken        { PassMessage $2 }
+  ;
+
+ServerMessage
+  : SERVER serverName "1" bootTimestamp linkTimestamp protocol
+      base64Numeric flags lastToken
+                          { let (sn, maxConns) = splitNumeric $7
+                            in  ServerMessage $2 $4 $5 $6 sn maxConns (Just $8) $9 }
   ;
 
 {
@@ -67,7 +82,7 @@ parseError :: Token -> LP a
 parseError _
   = fail "Parse error!"
 
-parseMessage :: String -> Either String PostAuthMessage
+parseMessage :: String -> Either String Message
 parseMessage
   = evalLP message
 }
