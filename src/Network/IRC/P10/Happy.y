@@ -1,10 +1,12 @@
 {
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
 module Network.IRC.P10.Happy where
 
 import Network.IRC.P10.Alex
 import Network.IRC.P10.Base64
+import Network.IRC.P10.Numeric
 import Network.IRC.P10.Syntax
 }
 
@@ -21,10 +23,13 @@ import Network.IRC.P10.Syntax
 
   PASS                    { StringTk "PASS" }
   SERVER                  { StringTk "SERVER" }
-  N                       { StringTk "N" }
+  EB                      { StringTk "EB" }
 
   protocol                { StringTk ('J' : $$) }
   flags                   { StringTk ('+' : $$) }
+
+  serverNumeric           { StringTk $$@[_, _] }
+  clientNumeric           { StringTk $$@[_, _, _, _, _] }
 
   token                   { StringTk $$ }
   lastToken               { ColonStringTk $$ }
@@ -66,34 +71,40 @@ sep1_(x, s)
 
 --
 
-ClientNumeric
-  : token                 {%  case $1 of
-                                [s1, s2, c1, c2, c3] ->
-                                  case (base64StringToInt [s1, s2],
-                                    base64StringToInt [c1, c2, c3])  of
-
-                                    (Just sn, Just cn) ->
-                                      return (ClientN (ServerN sn) cn)
-
-                                    _ -> fail $ "Parse error: " ++ $1 ++
-                                          " is not a valid client numeric"
-
-                                _ ->
-                                  fail $ "Parse error: " ++ $1 ++
-                                    " is not a valid client numeric"
-                          }
+ServerNumeric :: { Numeric ServerT }
+ServerNumeric
+  : serverNumeric
+      {%  case fromBase64 $1 of
+            Just sn ->  return sn
+            _       ->  fail $ "Parse error: " ++ $1 ++
+                          " is not a valid server numeric"
+      }
   ;
 
+ClientNumeric :: { Numeric ClientT }
+ClientNumeric
+  : clientNumeric
+      {%  case fromBase64 $1 of
+            Just cn ->  return cn
+            _       ->  fail $ "Parse error: " ++ $1 ++
+                          " is not a valid client numeric"
+      }
+  ;
+
+Message :: { Message }
 Message
-  : PASS lastToken        { PassM $2 }
+  : PASS lastToken
+      { PassM $2 }
 
   | SERVER token "1" token token protocol ClientNumeric
       opt(flags) lastToken
 
-                          { let ClientN sn maxConns = $7
-                            in  ServerM $2 $4 $5 $6 sn maxConns $8 $9
-                          }
+      { let ClientN sn maxConns = $7
+        in  ServerM $2 $4 $5 $6 sn maxConns $8 $9
+      }
 
+  | ServerNumeric EB
+      { EndBurstM $1 }
   ;
 
 {

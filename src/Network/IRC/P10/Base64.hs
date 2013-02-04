@@ -18,6 +18,9 @@ base64CharToInt :: Base64Char -> Maybe Int
 base64CharToInt c
   = lookup c (zip base64Chars [0..])
 
-base64StringToInt :: Base64String -> Maybe Int
-base64StringToInt s
-  = foldl' ((+) . (64 *)) 0 <$> mapM base64CharToInt s
+class IsBase64 a where
+  fromBase64 :: Base64String -> Maybe a
+
+instance IsBase64 Int where
+  fromBase64 s
+    = foldl' ((+) .  (64 *)) 0 <$> mapM base64CharToInt s
