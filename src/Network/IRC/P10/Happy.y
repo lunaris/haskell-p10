@@ -1,11 +1,14 @@
 {
+{-# LANGUAGE GADTs #-}
+
 module Network.IRC.P10.Happy where
 
 import Network.IRC.P10.Alex
+import Network.IRC.P10.Base64
 import Network.IRC.P10.Syntax
 }
 
-%name                     message PassMessage
+%name                     message Message
 %tokentype                { Token }
 %error                    { parseError }
 
@@ -20,14 +23,11 @@ import Network.IRC.P10.Syntax
   SERVER                  { StringTk "SERVER" }
   N                       { StringTk "N" }
 
-  base64Numeric           { StringTk $$ }
-  lastToken               { ColonStringTk $$ }
+  protocol                { StringTk ('J' : $$) }
+  flags                   { StringTk ('+' : $$) }
 
-  serverName              { StringTk $$ }
-  bootTimestamp           { StringTk $$ }
-  linkTimestamp           { StringTk $$ }
-  protocol                { StringTk $$ }
-  flags                   { StringTk $$ }
+  token                   { StringTk $$ }
+  lastToken               { ColonStringTk $$ }
 
 %%
 
@@ -66,21 +66,40 @@ sep1_(x, s)
 
 --
 
-PassMessage
-  : PASS lastToken        { PassMessage $2 }
+ClientNumeric
+  : token                 {%  case $1 of
+                                [s1, s2, c1, c2, c3] ->
+                                  case (base64StringToInt [s1, s2],
+                                    base64StringToInt [c1, c2, c3])  of
+
+                                    (Just sn, Just cn) ->
+                                      return (ClientN (ServerN sn) cn)
+
+                                    _ -> fail $ "Parse error: " ++ $1 ++
+                                          " is not a valid client numeric"
+
+                                _ ->
+                                  fail $ "Parse error: " ++ $1 ++
+                                    " is not a valid client numeric"
+                          }
   ;
 
-ServerMessage
-  : SERVER serverName "1" bootTimestamp linkTimestamp protocol
-      base64Numeric flags lastToken
-                          { let (sn, maxConns) = splitNumeric $7
-                            in  ServerMessage $2 $4 $5 $6 sn maxConns (Just $8) $9 }
+Message
+  : PASS lastToken        { PassM $2 }
+
+  | SERVER token "1" token token protocol ClientNumeric
+      opt(flags) lastToken
+
+                          { let ClientN sn maxConns = $7
+                            in  ServerM $2 $4 $5 $6 sn maxConns $8 $9
+                          }
+
   ;
 
 {
 parseError :: Token -> LP a
-parseError _
-  = fail "Parse error!"
+parseError tok
+  = fail $ "Parse error: " ++ show tok
 
 parseMessage :: String -> Either String Message
 parseMessage
